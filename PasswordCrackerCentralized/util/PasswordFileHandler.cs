@@ -11,7 +11,7 @@ namespace PasswordCrackerCentralized.util
         private static readonly Converter<char, byte> Converter = CharToByte;
 
         /// <summary>
-        /// With this method you can make you own password file
+        /// With this method you can make your own password file
         /// </summary>
         /// <param name="filename">Name of password file</param>
         /// <param name="usernames">List of usernames</param>
