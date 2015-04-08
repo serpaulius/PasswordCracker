@@ -5,7 +5,8 @@
         static void Main()
         {
             Cracking cracker = new Cracking();
-            cracker.RunCracking();
+            //cracker.RunCracking();
+            cracker.RunCrackingModified();
 
         }
     }
