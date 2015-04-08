@@ -35,9 +35,7 @@ namespace PasswordCrackerCentralized
             List<UserInfo> userInfos =
                 PasswordFileHandler.ReadPasswordFile("passwords.txt");
             List<UserInfoClearText> result = new List<UserInfoClearText>();
-            BlockingCollection<string> dictionary = new BlockingCollection<string>();
-            ReadDictionary(dictionary);
-            using (FileStream fs = new FileStream("webster-dictionary-reduced.txt", FileMode.Open, FileAccess.Read))
+            using (FileStream fs = new FileStream("webster-dictionary.txt", FileMode.Open, FileAccess.Read))
             using (StreamReader dictionary = new StreamReader(fs))
             {
                 while (!dictionary.EndOfStream)
@@ -45,9 +43,32 @@ namespace PasswordCrackerCentralized
                     String dictionaryEntry = dictionary.ReadLine();
                     IEnumerable<UserInfoClearText> partialResult = CheckWordWithVariations(dictionaryEntry, userInfos);
                     result.AddRange(partialResult);
-                    
                 }
             }
+            stopwatch.Stop();
+            Console.WriteLine(string.Join(", ", result));
+            Console.WriteLine("Out of {0} password {1} was found ", userInfos.Count, result.Count);
+            Console.WriteLine();
+            Console.WriteLine("Time elapsed: {0}", stopwatch.Elapsed);
+        }
+        public void RunCrackingModified()
+        {
+            Stopwatch stopwatch = Stopwatch.StartNew();
+
+            List<UserInfo> userInfos =
+                PasswordFileHandler.ReadPasswordFile("passwords.txt");
+            List<UserInfoClearText> result = new List<UserInfoClearText>();
+            BlockingCollection<string> dictionary = new BlockingCollection<string>();
+            ReadDictionary(dictionary);
+            BlockingCollection<string> transformedDictionary = new BlockingCollection<string>();
+            TransformDictionary(dictionary, transformedDictionary);
+
+            while(!dictionary.IsAddingCompleted && dictionary.Count != 0)
+            {
+                IEnumerable<UserInfoClearText> partialResult = CheckWordWithVariations(dictionary.Take(), userInfos);
+                result.AddRange(partialResult);
+            }
+
             stopwatch.Stop();
             Console.WriteLine(string.Join(", ", result));
             Console.WriteLine("Out of {0} password {1} was found ", userInfos.Count, result.Count);
@@ -67,6 +88,12 @@ namespace PasswordCrackerCentralized
                     collection.Add(dictionaryEntry);
                 }
             }
+            collection.CompleteAdding();
+        }
+
+        private void TransformDictionary(BlockingCollection<string> collection, BlockingCollection<string> transformedCollection)
+        {
+
         }
 
         /// <summary>
