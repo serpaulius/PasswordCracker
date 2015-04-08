@@ -60,8 +60,18 @@ namespace PasswordCrackerCentralized
             List<UserInfoClearText> result = new List<UserInfoClearText>();
             BlockingCollection<string> dictionary = new BlockingCollection<string>();
             ReadDictionary(dictionary);
+            Console.WriteLine("dictionary count: " + dictionary.Count);
+
             BlockingCollection<string> transformedDictionary = new BlockingCollection<string>();
             TransformDictionary(dictionary, transformedDictionary);
+            Console.WriteLine("transformed dictionary count: " + transformedDictionary.Count);
+
+            BlockingCollection<byte[]> transformedDictionaryByte = new BlockingCollection<byte[]>();
+            BlockingCollection<byte[]> encryptedDictionary = new BlockingCollection<byte[]>();
+            EncryptDictionary(transformedDictionary, transformedDictionaryByte, encryptedDictionary);
+            Console.WriteLine("encrypted dictionary count: " + encryptedDictionary.Count);
+
+
 
             while(!dictionary.IsAddingCompleted && dictionary.Count != 0)
             {
@@ -74,6 +84,23 @@ namespace PasswordCrackerCentralized
             Console.WriteLine("Out of {0} password {1} was found ", userInfos.Count, result.Count);
             Console.WriteLine();
             Console.WriteLine("Time elapsed: {0}", stopwatch.Elapsed);
+        }
+
+        private void EncryptDictionary(BlockingCollection<string> collection, BlockingCollection<byte[]> collectionInBytes, BlockingCollection<byte[]> encryptedCollectionInBytes)
+        {
+            while (!collection.IsAddingCompleted || collection.Count != 0)
+            {
+                char[] charArray = collection.Take().ToCharArray();
+                byte[] passwordAsBytes = Array.ConvertAll(charArray, PasswordFileHandler.GetConverter());
+                byte[] encryptedPassword = _messageDigest.ComputeHash(passwordAsBytes);
+
+                collectionInBytes.Add(passwordAsBytes);
+                encryptedCollectionInBytes.Add(encryptedPassword);
+
+
+            }
+            collectionInBytes.CompleteAdding();
+            encryptedCollectionInBytes.CompleteAdding();
         }
 
         public void ReadDictionary(BlockingCollection<string> collection)
@@ -93,7 +120,44 @@ namespace PasswordCrackerCentralized
 
         private void TransformDictionary(BlockingCollection<string> collection, BlockingCollection<string> transformedCollection)
         {
+            while (!collection.IsAddingCompleted || collection.Count != 0)
+            {
+                List<UserInfoClearText> result = new List<UserInfoClearText>();
 
+                String possiblePassword = collection.Take();
+                transformedCollection.Add(possiblePassword);
+
+                String possiblePasswordUpperCase = possiblePassword.ToUpper();
+                transformedCollection.Add(possiblePasswordUpperCase);
+
+                String possiblePasswordCapitalized = StringUtilities.Capitalize(possiblePassword);
+                transformedCollection.Add(possiblePasswordCapitalized);
+
+                String possiblePasswordReverse = StringUtilities.Reverse(possiblePassword);
+                transformedCollection.Add(possiblePasswordReverse);
+
+                for (int i = 0; i < 100; i++)
+                {
+                    String possiblePasswordEndDigit = possiblePassword + i;
+                    transformedCollection.Add(possiblePasswordEndDigit);
+                }
+
+                for (int i = 0; i < 100; i++)
+                {
+                    String possiblePasswordStartDigit = i + possiblePassword;
+                    transformedCollection.Add(possiblePasswordStartDigit);
+                }
+
+                for (int i = 0; i < 10; i++)
+                {
+                    for (int j = 0; j < 10; j++)
+                    {
+                        String possiblePasswordStartEndDigit = i + possiblePassword + j;
+                        transformedCollection.Add(possiblePasswordStartEndDigit);
+                    }
+                }
+            }
+            transformedCollection.CompleteAdding();
         }
 
         /// <summary>
