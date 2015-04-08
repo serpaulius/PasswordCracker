@@ -35,6 +35,8 @@ namespace PasswordCrackerCentralized
             List<UserInfo> userInfos =
                 PasswordFileHandler.ReadPasswordFile("passwords.txt");
             List<UserInfoClearText> result = new List<UserInfoClearText>();
+            BlockingCollection<string> dictionary = new BlockingCollection<string>();
+            ReadDictionary(dictionary);
             using (FileStream fs = new FileStream("webster-dictionary-reduced.txt", FileMode.Open, FileAccess.Read))
             using (StreamReader dictionary = new StreamReader(fs))
             {
@@ -43,6 +45,7 @@ namespace PasswordCrackerCentralized
                     String dictionaryEntry = dictionary.ReadLine();
                     IEnumerable<UserInfoClearText> partialResult = CheckWordWithVariations(dictionaryEntry, userInfos);
                     result.AddRange(partialResult);
+                    
                 }
             }
             stopwatch.Stop();
@@ -54,7 +57,16 @@ namespace PasswordCrackerCentralized
 
         public void ReadDictionary(BlockingCollection<string> dictionary)
         {
-            
+            List<UserInfoClearText> result = new List<UserInfoClearText>();
+            using (FileStream fs = new FileStream("webster-dictionary-reduced.txt", FileMode.Open, FileAccess.Read))
+            using (StreamReader dictionary = new StreamReader(fs))
+            {
+                while (!dictionary.EndOfStream)
+                {
+                    String dictionaryEntry = dictionary.ReadLine();
+                    dictionary.Add(dictionaryEntry);
+                }
+            }
         }
 
         /// <summary>
