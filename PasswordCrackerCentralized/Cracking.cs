@@ -2,8 +2,10 @@
 using PasswordCrackerCentralized.model;
 using PasswordCrackerCentralized.util;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq.Expressions;
 using System.Security.Cryptography;
 
 namespace PasswordCrackerCentralized
@@ -33,7 +35,9 @@ namespace PasswordCrackerCentralized
             List<UserInfo> userInfos =
                 PasswordFileHandler.ReadPasswordFile("passwords.txt");
             List<UserInfoClearText> result = new List<UserInfoClearText>();
-            using (FileStream fs = new FileStream("webster-dictionary.txt", FileMode.Open, FileAccess.Read))
+            BlockingCollection<string> dictionary = new BlockingCollection<string>();
+            ReadDictionary(dictionary);
+            using (FileStream fs = new FileStream("webster-dictionary-reduced.txt", FileMode.Open, FileAccess.Read))
             using (StreamReader dictionary = new StreamReader(fs))
             {
                 while (!dictionary.EndOfStream)
@@ -41,6 +45,7 @@ namespace PasswordCrackerCentralized
                     String dictionaryEntry = dictionary.ReadLine();
                     IEnumerable<UserInfoClearText> partialResult = CheckWordWithVariations(dictionaryEntry, userInfos);
                     result.AddRange(partialResult);
+                    
                 }
             }
             stopwatch.Stop();
@@ -48,6 +53,20 @@ namespace PasswordCrackerCentralized
             Console.WriteLine("Out of {0} password {1} was found ", userInfos.Count, result.Count);
             Console.WriteLine();
             Console.WriteLine("Time elapsed: {0}", stopwatch.Elapsed);
+        }
+
+        public void ReadDictionary(BlockingCollection<string> dictionary)
+        {
+            List<UserInfoClearText> result = new List<UserInfoClearText>();
+            using (FileStream fs = new FileStream("webster-dictionary-reduced.txt", FileMode.Open, FileAccess.Read))
+            using (StreamReader dictionary = new StreamReader(fs))
+            {
+                while (!dictionary.EndOfStream)
+                {
+                    String dictionaryEntry = dictionary.ReadLine();
+                    dictionary.Add(dictionaryEntry);
+                }
+            }
         }
 
         /// <summary>
