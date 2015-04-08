@@ -4,9 +4,12 @@ using PasswordCrackerCentralized.util;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq.Expressions;
 using System.Security.Cryptography;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace PasswordCrackerCentralized
 {
@@ -35,6 +38,7 @@ namespace PasswordCrackerCentralized
             List<UserInfo> userInfos =
                 PasswordFileHandler.ReadPasswordFile("passwords.txt");
             List<UserInfoClearText> result = new List<UserInfoClearText>();
+            //using (FileStream fs = new FileStream("webster-dictionary-reduced.txt", FileMode.Open, FileAccess.Read))
             using (FileStream fs = new FileStream("webster-dictionary.txt", FileMode.Open, FileAccess.Read))
             using (StreamReader dictionary = new StreamReader(fs))
             {
@@ -58,26 +62,38 @@ namespace PasswordCrackerCentralized
             List<UserInfo> userInfos =
                 PasswordFileHandler.ReadPasswordFile("passwords.txt");
             List<UserInfoClearText> result = new List<UserInfoClearText>();
+
             BlockingCollection<string> dictionary = new BlockingCollection<string>();
-            ReadDictionary(dictionary);
-            Console.WriteLine("dictionary count: " + dictionary.Count);
 
-            BlockingCollection<string> transformedDictionary = new BlockingCollection<string>();
-            TransformDictionary(dictionary, transformedDictionary);
-            Console.WriteLine("transformed dictionary count: " + transformedDictionary.Count);
+            //ReadDictionary(dictionary);
+            //Task.Run(() => ReadDictionary(dictionary));
 
-            BlockingCollection<byte[]> transformedDictionaryByte = new BlockingCollection<byte[]>();
-            BlockingCollection<byte[]> encryptedDictionary = new BlockingCollection<byte[]>();
-            EncryptDictionary(transformedDictionary, transformedDictionaryByte, encryptedDictionary);
-            Console.WriteLine("encrypted dictionary count: " + encryptedDictionary.Count);
+            BlockingCollection<string> transformedDictionary = new BlockingCollection<string>(10000);
+            
+            //TransformDictionary(dictionary, transformedDictionary);
+            //Task.Run(() => TransformDictionary(dictionary, transformedDictionary));
 
+            BlockingCollection<Tuple<string, byte[]>> encryptedDictionary = new BlockingCollection<Tuple<string, byte[]>>();
+            
+            //EncryptDictionary(transformedDictionary, encryptedDictionary);
+            //Task.Run(() => EncryptDictionary(transformedDictionary, encryptedDictionary));
 
+            //result = ComparePasswords(userInfos, encryptedDictionary);
+            //Task.Run(() => ComparePasswords(userInfos, encryptedDictionary));
 
-            while(!dictionary.IsAddingCompleted && dictionary.Count != 0)
-            {
-                IEnumerable<UserInfoClearText> partialResult = CheckWordWithVariations(dictionary.Take(), userInfos);
-                result.AddRange(partialResult);
-            }
+            Parallel.Invoke(() => ReadDictionary(dictionary),
+                () => TransformDictionary(dictionary, transformedDictionary),
+                () => EncryptDictionary(transformedDictionary, encryptedDictionary),
+                () => ComparePasswords(userInfos, encryptedDictionary),
+                () => PrintCounts(dictionary, transformedDictionary, encryptedDictionary)
+                );
+            
+
+//            while(!dictionary.IsAddingCompleted && dictionary.Count != 0)
+//            {
+//                IEnumerable<UserInfoClearText> partialResult = CheckWordWithVariations(dictionary.Take(), userInfos);
+//                result.AddRange(partialResult);
+//            }
 
             stopwatch.Stop();
             Console.WriteLine(string.Join(", ", result));
@@ -86,27 +102,67 @@ namespace PasswordCrackerCentralized
             Console.WriteLine("Time elapsed: {0}", stopwatch.Elapsed);
         }
 
-        private void EncryptDictionary(BlockingCollection<string> collection, BlockingCollection<byte[]> collectionInBytes, BlockingCollection<byte[]> encryptedCollectionInBytes)
+        private void PrintCounts(BlockingCollection<string> one, BlockingCollection<string> two, BlockingCollection<Tuple<string, byte[]>> three)
         {
-            while (!collection.IsAddingCompleted || collection.Count != 0)
+            while (true)
             {
-                char[] charArray = collection.Take().ToCharArray();
+                Console.WriteLine(one.Count + "\t" + two.Count + "\t" + three.Count);
+                Thread.Sleep(1000);
+                if (one.Count == 0 && two.Count == 0 && three.Count == 0)
+                {
+                    break;
+                }
+            }
+
+        }
+
+        private List<UserInfoClearText> ComparePasswords(IEnumerable<UserInfo> userInfos, BlockingCollection<Tuple<string, byte[]>> possiblePasswordsEncrypted)
+        {
+            List<UserInfoClearText> results = new List<UserInfoClearText>();
+
+            while (!possiblePasswordsEncrypted.IsCompleted)
+            {
+                Tuple<string, byte[]> tuple = possiblePasswordsEncrypted.Take();
+                byte[] encryptedPassword = tuple.Item2;
+                string possiblePassword = tuple.Item1;
+                foreach (UserInfo userInfo in userInfos)
+                {
+                    if (CompareBytes(userInfo.EntryptedPassword, encryptedPassword))
+                    {
+                        results.Add(new UserInfoClearText(userInfo.Username, possiblePassword));
+                        Console.WriteLine(userInfo.Username + " " + possiblePassword);
+                    }
+                }
+            }
+            return results;
+        }
+
+        private void EncryptDictionary(BlockingCollection<string> collection, BlockingCollection<Tuple<string, byte[]>> encryptedCollectionInBytes)
+        {
+            while (!collection.IsCompleted)
+            {
+                string str = collection.Take();
+                char[] charArray = str.ToCharArray();
                 byte[] passwordAsBytes = Array.ConvertAll(charArray, PasswordFileHandler.GetConverter());
+
+// For using it in a few threads
+//                HashAlgorithm messageDigestLocal = new SHA1CryptoServiceProvider(); ;
+//                byte[] encryptedPassword = messageDigestLocal.ComputeHash(passwordAsBytes);
+
                 byte[] encryptedPassword = _messageDigest.ComputeHash(passwordAsBytes);
 
-                collectionInBytes.Add(passwordAsBytes);
-                encryptedCollectionInBytes.Add(encryptedPassword);
+                encryptedCollectionInBytes.Add(new Tuple<string, byte[]>(str, encryptedPassword));
 
 
             }
-            collectionInBytes.CompleteAdding();
             encryptedCollectionInBytes.CompleteAdding();
         }
 
         public void ReadDictionary(BlockingCollection<string> collection)
         {
             List<UserInfoClearText> result = new List<UserInfoClearText>();
-            using (FileStream fs = new FileStream("webster-dictionary-reduced.txt", FileMode.Open, FileAccess.Read))
+            //using (FileStream fs = new FileStream("webster-dictionary-reduced.txt", FileMode.Open, FileAccess.Read))
+            using (FileStream fs = new FileStream("webster-dictionary.txt", FileMode.Open, FileAccess.Read))
             using (StreamReader dictionary = new StreamReader(fs))
             {
                 while (!dictionary.EndOfStream)
@@ -120,7 +176,8 @@ namespace PasswordCrackerCentralized
 
         private void TransformDictionary(BlockingCollection<string> collection, BlockingCollection<string> transformedCollection)
         {
-            while (!collection.IsAddingCompleted || collection.Count != 0)
+            Console.WriteLine("count: " + collection.Count);
+            while (!collection.IsCompleted)
             {
                 List<UserInfoClearText> result = new List<UserInfoClearText>();
 
