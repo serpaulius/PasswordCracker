@@ -55,7 +55,7 @@ namespace PasswordCrackerCentralized
             Console.WriteLine("Time elapsed: {0}", stopwatch.Elapsed);
         }
 
-        public void ReadDictionary(BlockingCollection<string> dictionary)
+        public void ReadDictionary(BlockingCollection<string> collection)
         {
             List<UserInfoClearText> result = new List<UserInfoClearText>();
             using (FileStream fs = new FileStream("webster-dictionary-reduced.txt", FileMode.Open, FileAccess.Read))
@@ -64,7 +64,7 @@ namespace PasswordCrackerCentralized
                 while (!dictionary.EndOfStream)
                 {
                     String dictionaryEntry = dictionary.ReadLine();
-                    dictionary.Add(dictionaryEntry);
+                    collection.Add(dictionaryEntry);
                 }
             }
         }
