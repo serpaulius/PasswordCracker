@@ -21,6 +21,9 @@ namespace PasswordCrackerCentralized
         /// </summary>
         private readonly HashAlgorithm _messageDigest;
 
+        //private const string NameOfDictionaryFile = "webster-dictionary-reduced.txt";
+        private const string NameOfDictionaryFile = "webster-dictionary.txt";
+
         public Cracking()
         {
             _messageDigest = new SHA1CryptoServiceProvider();
@@ -38,8 +41,7 @@ namespace PasswordCrackerCentralized
             List<UserInfo> userInfos =
                 PasswordFileHandler.ReadPasswordFile("passwords.txt");
             List<UserInfoClearText> result = new List<UserInfoClearText>();
-            //using (FileStream fs = new FileStream("webster-dictionary-reduced.txt", FileMode.Open, FileAccess.Read))
-            using (FileStream fs = new FileStream("webster-dictionary.txt", FileMode.Open, FileAccess.Read))
+            using (FileStream fs = new FileStream(NameOfDictionaryFile, FileMode.Open, FileAccess.Read))
             using (StreamReader dictionary = new StreamReader(fs))
             {
                 while (!dictionary.EndOfStream)
@@ -73,6 +75,8 @@ namespace PasswordCrackerCentralized
             //TransformDictionary(dictionary, transformedDictionary);
             //Task.Run(() => TransformDictionary(dictionary, transformedDictionary));
 
+            //TODO: The bottleneck is here (most of the calculations are made in method Encrypt Dictionary) so we need to make few processes
+            //TODO: who encrypt passwords in separate threads and buffers (maybe)
             BlockingCollection<Tuple<string, byte[]>> encryptedDictionary = new BlockingCollection<Tuple<string, byte[]>>();
             
             //EncryptDictionary(transformedDictionary, encryptedDictionary);
@@ -80,21 +84,49 @@ namespace PasswordCrackerCentralized
 
             //result = ComparePasswords(userInfos, encryptedDictionary);
             //Task.Run(() => ComparePasswords(userInfos, encryptedDictionary));
-
-            Parallel.Invoke(() => ReadDictionary(dictionary),
-                () => TransformDictionary(dictionary, transformedDictionary),
-                () => EncryptDictionary(transformedDictionary, encryptedDictionary),
-                () => ComparePasswords(userInfos, encryptedDictionary),
-                () => PrintCounts(dictionary, transformedDictionary, encryptedDictionary)
-                );
+            Cracking[] crackingMachinesHaha;
+            int howManyCrackers = 50;
+            crackingMachinesHaha = new Cracking[howManyCrackers];
+            for(int i = 0; i < howManyCrackers; i++)
+            {
+                crackingMachinesHaha[i] = new Cracking();
+            }
             
+            //Only one cracker is veeeeeeeeeeeeery slow
+//            Parallel.Invoke(() => ReadDictionary(dictionary),
+//                () => TransformDictionary(dictionary, transformedDictionary),
+//                () => EncryptDictionary(transformedDictionary, encryptedDictionary),
+//                () => ComparePasswords(userInfos, encryptedDictionary),
+//                () => PrintCounts(dictionary, transformedDictionary, encryptedDictionary)
+//                );
 
-//            while(!dictionary.IsAddingCompleted && dictionary.Count != 0)
-//            {
-//                IEnumerable<UserInfoClearText> partialResult = CheckWordWithVariations(dictionary.Take(), userInfos);
-//                result.AddRange(partialResult);
-//            }
+            //This is a much faster solution - to make much more hash calculators
+            Task.Run(() => ReadDictionary(dictionary));
+            Task.Run(() => TransformDictionary(dictionary, transformedDictionary));
+            Task.Run(() => EncryptDictionary(transformedDictionary, encryptedDictionary));
 
+            //No result returning:
+            //Task.Run(() => ComparePasswords(userInfos, encryptedDictionary));
+
+            //This is going to return a list of found names:
+            Task<List<UserInfoClearText>> taskOfComparing = Task<List<UserInfoClearText>>.Factory.StartNew(
+                () => ComparePasswords(userInfos, encryptedDictionary)
+                );
+
+            //For seeing how many things there are in BlockingCollections every second
+            Task.Run(() => PrintCounts(dictionary, transformedDictionary, encryptedDictionary));
+
+            //Running
+            Parallel.For(0, howManyCrackers,
+                (i) => crackingMachinesHaha[i].EncryptDictionary(transformedDictionary, encryptedDictionary));
+
+            //Waiting for all tasks to finish
+            Task.WaitAll();
+
+            //Saving results:
+            result = taskOfComparing.Result;
+
+            //Printing results and stopping stopwatch
             stopwatch.Stop();
             Console.WriteLine(string.Join(", ", result));
             Console.WriteLine("Out of {0} password {1} was found ", userInfos.Count, result.Count);
@@ -144,16 +176,17 @@ namespace PasswordCrackerCentralized
                 string str = collection.Take();
                 char[] charArray = str.ToCharArray();
                 byte[] passwordAsBytes = Array.ConvertAll(charArray, PasswordFileHandler.GetConverter());
-
-// For using it in a few threads
-//                HashAlgorithm messageDigestLocal = new SHA1CryptoServiceProvider(); ;
-//                byte[] encryptedPassword = messageDigestLocal.ComputeHash(passwordAsBytes);
-
                 byte[] encryptedPassword = _messageDigest.ComputeHash(passwordAsBytes);
 
-                encryptedCollectionInBytes.Add(new Tuple<string, byte[]>(str, encryptedPassword));
-
-
+                try
+                {
+                    encryptedCollectionInBytes.Add(new Tuple<string, byte[]>(str, encryptedPassword));
+                }
+                catch (InvalidOperationException e)
+                {
+                    Console.WriteLine("All items are already Encrypted! Finishing this thread!");
+                    break;
+                }
             }
             encryptedCollectionInBytes.CompleteAdding();
         }
@@ -161,8 +194,7 @@ namespace PasswordCrackerCentralized
         public void ReadDictionary(BlockingCollection<string> collection)
         {
             List<UserInfoClearText> result = new List<UserInfoClearText>();
-            //using (FileStream fs = new FileStream("webster-dictionary-reduced.txt", FileMode.Open, FileAccess.Read))
-            using (FileStream fs = new FileStream("webster-dictionary.txt", FileMode.Open, FileAccess.Read))
+            using (FileStream fs = new FileStream(NameOfDictionaryFile, FileMode.Open, FileAccess.Read))
             using (StreamReader dictionary = new StreamReader(fs))
             {
                 while (!dictionary.EndOfStream)
