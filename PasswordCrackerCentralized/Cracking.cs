@@ -173,7 +173,20 @@ namespace PasswordCrackerCentralized
         {
             while (!collection.IsCompleted)
             {
-                string str = collection.Take();
+                string str;
+                try
+                {
+                    str = collection.Take();
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Cannot take from already completed collection!");
+                    Console.WriteLine("----------------");
+                    Console.WriteLine();
+                    Console.WriteLine("----------------");
+                    break;
+                }
+                
                 char[] charArray = str.ToCharArray();
                 byte[] passwordAsBytes = Array.ConvertAll(charArray, PasswordFileHandler.GetConverter());
                 byte[] encryptedPassword = _messageDigest.ComputeHash(passwordAsBytes);
