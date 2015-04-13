@@ -21,8 +21,8 @@ namespace PasswordCrackerCentralized
         /// </summary>
         private readonly HashAlgorithm _messageDigest;
 
-        private const string NameOfDictionaryFile = "webster-dictionary-reduced.txt";
-//        private const string NameOfDictionaryFile = "webster-dictionary.txt";
+//        private const string NameOfDictionaryFile = "webster-dictionary-reduced.txt";
+        private const string NameOfDictionaryFile = "webster-dictionary.txt";
 
         public Cracking()
         {
@@ -85,7 +85,7 @@ namespace PasswordCrackerCentralized
             //result = ComparePasswords(userInfos, encryptedDictionary);
             //Task.Run(() => ComparePasswords(userInfos, encryptedDictionary));
             Cracking[] crackingMachinesHaha;
-            int howManyCrackers = 50;
+            int howManyCrackers = 10;
             crackingMachinesHaha = new Cracking[howManyCrackers];
             for(int i = 0; i < howManyCrackers; i++)
             {
@@ -117,11 +117,26 @@ namespace PasswordCrackerCentralized
             Task.Run(() => PrintCounts(dictionary, transformedDictionary, encryptedDictionary));
 
             //Running
+
+//            for (int i = 0; i < howManyCrackers/2; i++)
+//            {
+//                int j = i;
+//                Task.Run(() => (new Cracking()).ComparePasswords(userInfos, encryptedDictionary));
+//            }
+//
+//            for (int i = 0; i < howManyCrackers / 2; i++)
+//            {
+//                int j = i;
+//                Task.Run(() => crackingMachinesHaha[j].EncryptDictionary(transformedDictionary, encryptedDictionary));
+//            }
+
             Parallel.For(0, howManyCrackers,
                 (i) => crackingMachinesHaha[i].EncryptDictionary(transformedDictionary, encryptedDictionary));
 
+
+
             //Waiting for all tasks to finish
-            Task.WaitAll();
+            //Task.WaitAll();
 
             //Saving results:
             result = taskOfComparing.Result;
