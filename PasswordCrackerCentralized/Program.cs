@@ -8,8 +8,8 @@ namespace PasswordCrackerCentralized
         {
             Cracking cracker = new Cracking();
 
-//            Console.WriteLine("---> Centralized:");
-//            cracker.RunCracking();
+            Console.WriteLine("---> Centralized:");
+            cracker.RunCracking();
 
             Console.WriteLine();
             Console.WriteLine("---> Pipeline:");

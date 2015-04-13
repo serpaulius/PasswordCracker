@@ -21,8 +21,8 @@ namespace PasswordCrackerCentralized
         /// </summary>
         private readonly HashAlgorithm _messageDigest;
 
-        //private const string NameOfDictionaryFile = "webster-dictionary-reduced.txt";
-        private const string NameOfDictionaryFile = "webster-dictionary.txt";
+        private const string NameOfDictionaryFile = "webster-dictionary-reduced.txt";
+//        private const string NameOfDictionaryFile = "webster-dictionary.txt";
 
         public Cracking()
         {
