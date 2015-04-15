@@ -21,8 +21,10 @@ namespace PasswordCrackerCentralized
         /// </summary>
         private readonly HashAlgorithm _messageDigest;
 
-//        private const string NameOfDictionaryFile = "webster-dictionary-reduced.txt";
-        private const string NameOfDictionaryFile = "webster-dictionary.txt";
+        private const string NameOfDictionaryFile = "webster-dictionary-reduced.txt";
+//        private const string NameOfDictionaryFile = "webster-dictionary.txt";
+
+        private ulong dictionaryWordCount = 0;
 
         public Cracking()
         {
@@ -36,6 +38,9 @@ namespace PasswordCrackerCentralized
         /// </summary>
         public void RunCracking()
         {
+            //Added word count
+            dictionaryWordCount = 0;
+
             Stopwatch stopwatch = Stopwatch.StartNew();
 
             List<UserInfo> userInfos =
@@ -49,6 +54,9 @@ namespace PasswordCrackerCentralized
                     String dictionaryEntry = dictionary.ReadLine();
                     IEnumerable<UserInfoClearText> partialResult = CheckWordWithVariations(dictionaryEntry, userInfos);
                     result.AddRange(partialResult);
+
+                    //Added counting
+                    dictionaryWordCount++;
                 }
             }
             stopwatch.Stop();
@@ -56,89 +64,79 @@ namespace PasswordCrackerCentralized
             Console.WriteLine("Out of {0} password {1} was found ", userInfos.Count, result.Count);
             Console.WriteLine();
             Console.WriteLine("Time elapsed: {0}", stopwatch.Elapsed);
+
+            //Added speed:
+            Console.WriteLine("Average speed (words/second): {0}", dictionaryWordCount / (ulong)(stopwatch.Elapsed.Seconds));
         }
-        public void RunCrackingModified()
+
+        public void RunCrackingModified(int encryptorCount)
         {
+            dictionaryWordCount = 0;
+
             Stopwatch stopwatch = Stopwatch.StartNew();
 
-            List<UserInfo> userInfos =
-                PasswordFileHandler.ReadPasswordFile("passwords.txt");
+            List<UserInfo> userInfos = PasswordFileHandler.ReadPasswordFile("passwords.txt");
             List<UserInfoClearText> result = new List<UserInfoClearText>();
 
-            BlockingCollection<string> dictionary = new BlockingCollection<string>();
+            BlockingCollection<string> wordDictionary = new BlockingCollection<string>();
 
-            //ReadDictionary(dictionary);
-            //Task.Run(() => ReadDictionary(dictionary));
+            BlockingCollection<string> transformedWordsDictionary = new BlockingCollection<string>(10000);
 
-            BlockingCollection<string> transformedDictionary = new BlockingCollection<string>(10000);
-            
-            //TransformDictionary(dictionary, transformedDictionary);
-            //Task.Run(() => TransformDictionary(dictionary, transformedDictionary));
+            //Tuple is used for joining passwords with their encrypted version, so that we will not need to search for them in other threads,
+            //e.g.: password (string): "pswd", encrypted password (byte[]): "????????"
+            BlockingCollection<Tuple<string, byte[]>> encryptedWordsDictionary = new BlockingCollection<Tuple<string, byte[]>>();
 
-            //TODO: The bottleneck is here (most of the calculations are made in method Encrypt Dictionary) so we need to make few processes
-            //TODO: who encrypt passwords in separate threads and buffers (maybe)
-            BlockingCollection<Tuple<string, byte[]>> encryptedDictionary = new BlockingCollection<Tuple<string, byte[]>>();
-            
-            //EncryptDictionary(transformedDictionary, encryptedDictionary);
-            //Task.Run(() => EncryptDictionary(transformedDictionary, encryptedDictionary));
-
-            //result = ComparePasswords(userInfos, encryptedDictionary);
-            //Task.Run(() => ComparePasswords(userInfos, encryptedDictionary));
-            Cracking[] crackingMachinesHaha;
-            int howManyCrackers = 10;
-            crackingMachinesHaha = new Cracking[howManyCrackers];
-            for(int i = 0; i < howManyCrackers; i++)
-            {
-                crackingMachinesHaha[i] = new Cracking();
-            }
-            
             //Only one cracker is veeeeeeeeeeeeery slow
-//            Parallel.Invoke(() => ReadDictionary(dictionary),
-//                () => TransformDictionary(dictionary, transformedDictionary),
-//                () => EncryptDictionary(transformedDictionary, encryptedDictionary),
-//                () => ComparePasswords(userInfos, encryptedDictionary),
-//                () => PrintCounts(dictionary, transformedDictionary, encryptedDictionary)
-//                );
+            //            Parallel.Invoke(() => ReadDictionary(dictionary),
+            //                () => TransformDictionary(dictionary, transformedDictionary),
+            //                () => EncryptDictionary(transformedDictionary, encryptedDictionary),
+            //                () => ComparePasswords(userInfos, encryptedDictionary),
+            //                () => PrintCounts(dictionary, transformedDictionary, encryptedDictionary)
+            //                );
 
             //This is a much faster solution - to make much more hash calculators
-            Task.Run(() => ReadDictionary(dictionary));
-            Task.Run(() => TransformDictionary(dictionary, transformedDictionary));
-            Task.Run(() => EncryptDictionary(transformedDictionary, encryptedDictionary));
 
-            //No result returning:
-            //Task.Run(() => ComparePasswords(userInfos, encryptedDictionary));
+            //Making many crackers, so that we could start them in separate threads. We can't use one Cracker object,
+            //because one method can only be used by one thread at the same time.
+            //You can change the number of "crackers" by changing the value of howManyCrackers. It should be at least 1.
+            Cracking[] crackingObjects;
+            int howManyCrackers = encryptorCount;
+            crackingObjects = new Cracking[howManyCrackers];
+            for (int i = 0; i < howManyCrackers; i++)
+            {
+                crackingObjects[i] = new Cracking();
+            }
 
-            //This is going to return a list of found names:
+            //Starting all the tasks except EncryptDictionary
+            Task.Run(() => ReadDictionary(wordDictionary));
+            Task.Run(() => TransformDictionary(wordDictionary, transformedWordsDictionary));
+            //ComparePasswords is going to return a list of found passwords, so we are making it as a Task with return:
             Task<List<UserInfoClearText>> taskOfComparing = Task<List<UserInfoClearText>>.Factory.StartNew(
-                () => ComparePasswords(userInfos, encryptedDictionary)
+                () => ComparePasswords(userInfos, encryptedWordsDictionary)
                 );
 
-            //For seeing how many things there are in BlockingCollections every second
-            Task.Run(() => PrintCounts(dictionary, transformedDictionary, encryptedDictionary));
+            //Run a thread for seeing how many things there are in BlockingCollections every second, while debugging:
+            Task.Run(() => PrintCounts(wordDictionary, transformedWordsDictionary, encryptedWordsDictionary));
 
-            //Running
-
-//            for (int i = 0; i < howManyCrackers/2; i++)
-//            {
-//                int j = i;
-//                Task.Run(() => (new Cracking()).ComparePasswords(userInfos, encryptedDictionary));
-//            }
-//
-//            for (int i = 0; i < howManyCrackers / 2; i++)
-//            {
-//                int j = i;
-//                Task.Run(() => crackingMachinesHaha[j].EncryptDictionary(transformedDictionary, encryptedDictionary));
-//            }
-
+            //The bottleneck is here (most of the calculations are made in method EncryptDictionary), so
+            //we are making few processes who encrypt passwords separately.
+            //So now we are running all the EncryptDictionary threads in parallel!
             Parallel.For(0, howManyCrackers,
-                (i) => crackingMachinesHaha[i].EncryptDictionary(transformedDictionary, encryptedDictionary));
+                (i) => crackingObjects[i].EncryptDictionary(transformedWordsDictionary, encryptedWordsDictionary));
+            //Can also use Tasks instead of parallel, and if you want more Encryptors and/or Comparators:
+            //            for (int i = 0; i < howManyCrackers/2; i++)
+            //            {
+            //                int j = i;
+            //                Task.Run(() => (new Cracking()).ComparePasswords(userInfos, encryptedDictionary));
+            //            }
+            //
+            //            for (int i = 0; i < howManyCrackers / 2; i++)
+            //            {
+            //                int j = i;
+            //                Task.Run(() => crackingMachinesHaha[j].EncryptDictionary(transformedDictionary, encryptedDictionary));
+            //            }
 
-
-
-            //Waiting for all tasks to finish
-            //Task.WaitAll();
-
-            //Saving results:
+            //Saving results (this will wait here until the ComparePasswords task in object taskOfComparing will finish it's work):
             result = taskOfComparing.Result;
 
             //Printing results and stopping stopwatch
@@ -147,9 +145,12 @@ namespace PasswordCrackerCentralized
             Console.WriteLine("Out of {0} password {1} was found ", userInfos.Count, result.Count);
             Console.WriteLine();
             Console.WriteLine("Time elapsed: {0}", stopwatch.Elapsed);
+
+            Console.WriteLine("Average speed (words/second): {0}", dictionaryWordCount/(ulong)(stopwatch.Elapsed.Seconds));
         }
 
-        private void PrintCounts(BlockingCollection<string> one, BlockingCollection<string> two, BlockingCollection<Tuple<string, byte[]>> three)
+        private void PrintCounts(BlockingCollection<string> one, BlockingCollection<string> two,
+            BlockingCollection<Tuple<string, byte[]>> three)
         {
             while (true)
             {
@@ -160,10 +161,10 @@ namespace PasswordCrackerCentralized
                     break;
                 }
             }
-
         }
 
-        private List<UserInfoClearText> ComparePasswords(IEnumerable<UserInfo> userInfos, BlockingCollection<Tuple<string, byte[]>> possiblePasswordsEncrypted)
+        private List<UserInfoClearText> ComparePasswords(IEnumerable<UserInfo> userInfos,
+            BlockingCollection<Tuple<string, byte[]>> possiblePasswordsEncrypted)
         {
             List<UserInfoClearText> results = new List<UserInfoClearText>();
 
@@ -184,7 +185,8 @@ namespace PasswordCrackerCentralized
             return results;
         }
 
-        private void EncryptDictionary(BlockingCollection<string> collection, BlockingCollection<Tuple<string, byte[]>> encryptedCollectionInBytes)
+        private void EncryptDictionary(BlockingCollection<string> collection,
+            BlockingCollection<Tuple<string, byte[]>> encryptedCollectionInBytes)
         {
             while (!collection.IsCompleted)
             {
@@ -201,7 +203,7 @@ namespace PasswordCrackerCentralized
                     Console.WriteLine("----------------");
                     break;
                 }
-                
+
                 char[] charArray = str.ToCharArray();
                 byte[] passwordAsBytes = Array.ConvertAll(charArray, PasswordFileHandler.GetConverter());
                 byte[] encryptedPassword = _messageDigest.ComputeHash(passwordAsBytes);
@@ -229,12 +231,14 @@ namespace PasswordCrackerCentralized
                 {
                     String dictionaryEntry = dictionary.ReadLine();
                     collection.Add(dictionaryEntry);
+                    dictionaryWordCount++;
                 }
             }
             collection.CompleteAdding();
         }
 
-        private void TransformDictionary(BlockingCollection<string> collection, BlockingCollection<string> transformedCollection)
+        private void TransformDictionary(BlockingCollection<string> collection,
+            BlockingCollection<string> transformedCollection)
         {
             Console.WriteLine("count: " + collection.Count);
             while (!collection.IsCompleted)
@@ -296,7 +300,8 @@ namespace PasswordCrackerCentralized
             result.AddRange(partialResultUpperCase);
 
             String possiblePasswordCapitalized = StringUtilities.Capitalize(dictionaryEntry);
-            IEnumerable<UserInfoClearText> partialResultCapitalized = CheckSingleWord(userInfos, possiblePasswordCapitalized);
+            IEnumerable<UserInfoClearText> partialResultCapitalized = CheckSingleWord(userInfos,
+                possiblePasswordCapitalized);
             result.AddRange(partialResultCapitalized);
 
             String possiblePasswordReverse = StringUtilities.Reverse(dictionaryEntry);
@@ -306,14 +311,16 @@ namespace PasswordCrackerCentralized
             for (int i = 0; i < 100; i++)
             {
                 String possiblePasswordEndDigit = dictionaryEntry + i;
-                IEnumerable<UserInfoClearText> partialResultEndDigit = CheckSingleWord(userInfos, possiblePasswordEndDigit);
+                IEnumerable<UserInfoClearText> partialResultEndDigit = CheckSingleWord(userInfos,
+                    possiblePasswordEndDigit);
                 result.AddRange(partialResultEndDigit);
             }
 
             for (int i = 0; i < 100; i++)
             {
                 String possiblePasswordStartDigit = i + dictionaryEntry;
-                IEnumerable<UserInfoClearText> partialResultStartDigit = CheckSingleWord(userInfos, possiblePasswordStartDigit);
+                IEnumerable<UserInfoClearText> partialResultStartDigit = CheckSingleWord(userInfos,
+                    possiblePasswordStartDigit);
                 result.AddRange(partialResultStartDigit);
             }
 
@@ -322,7 +329,8 @@ namespace PasswordCrackerCentralized
                 for (int j = 0; j < 10; j++)
                 {
                     String possiblePasswordStartEndDigit = i + dictionaryEntry + j;
-                    IEnumerable<UserInfoClearText> partialResultStartEndDigit = CheckSingleWord(userInfos, possiblePasswordStartEndDigit);
+                    IEnumerable<UserInfoClearText> partialResultStartEndDigit = CheckSingleWord(userInfos,
+                        possiblePasswordStartEndDigit);
                     result.AddRange(partialResultStartEndDigit);
                 }
             }
@@ -382,6 +390,5 @@ namespace PasswordCrackerCentralized
             }
             return true;
         }
-
     }
 }

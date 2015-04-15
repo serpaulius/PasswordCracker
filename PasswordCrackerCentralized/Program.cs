@@ -7,13 +7,17 @@ namespace PasswordCrackerCentralized
         static void Main()
         {
             Cracking cracker = new Cracking();
-//
-//            Console.WriteLine("---> Centralized:");
-//            cracker.RunCracking();
+
+            Console.WriteLine("---> Centralized:");
+            cracker.RunCracking();
 
             Console.WriteLine();
-            Console.WriteLine("---> Pipeline:");
-            cracker.RunCrackingModified();
+            Console.WriteLine("---> Simple (one threaded encryption) Pipeline:");
+            cracker.RunCrackingModified(1);
+
+            Console.WriteLine();
+            Console.WriteLine("---> Master/Slave'd (multi-threaded encryption) Pipeline:");
+            cracker.RunCrackingModified(10);
 
             Console.WriteLine();
             Console.WriteLine("Program ended successfully!");
