@@ -16,7 +16,7 @@ namespace PasswordCrackerCentralized
             cracker.RunCrackingModified(1);
 
             Console.WriteLine();
-            Console.WriteLine("---> Master/Slave'd (multi-threaded encryption) Pipeline:");
+            Console.WriteLine("---> Master/Slave'd (10-threaded encryption) Pipeline:");
             cracker.RunCrackingModified(10);
 
             Console.WriteLine();

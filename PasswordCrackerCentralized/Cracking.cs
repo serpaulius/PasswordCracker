@@ -21,8 +21,8 @@ namespace PasswordCrackerCentralized
         /// </summary>
         private readonly HashAlgorithm _messageDigest;
 
-        private const string NameOfDictionaryFile = "webster-dictionary-reduced.txt";
-//        private const string NameOfDictionaryFile = "webster-dictionary.txt";
+//        private const string NameOfDictionaryFile = "webster-dictionary-reduced.txt";
+        private const string NameOfDictionaryFile = "webster-dictionary.txt";
 
         private ulong dictionaryWordCount = 0;
 
@@ -116,7 +116,7 @@ namespace PasswordCrackerCentralized
                 );
 
             //Run a thread for seeing how many things there are in BlockingCollections every second, while debugging:
-            Task.Run(() => PrintCounts(wordDictionary, transformedWordsDictionary, encryptedWordsDictionary));
+            //Task.Run(() => PrintCounts(wordDictionary, transformedWordsDictionary, encryptedWordsDictionary));
 
             //The bottleneck is here (most of the calculations are made in method EncryptDictionary), so
             //we are making few processes who encrypt passwords separately.
